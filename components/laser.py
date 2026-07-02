@@ -2,7 +2,7 @@
 
 import numpy as np
 
-from components.pulse import CoherentPulse
+from components.pulse import CoherentPulse,CoherentPulseBatch
 
 
 class Laser:
@@ -28,4 +28,23 @@ class Laser:
             mu=self.mu,
             phase=0.0,
             wavelength=self.wavelength,
+        )
+    
+    #Vectorized
+    def emit_batch(self, batch_size: int):
+
+        actual_mu = np.random.normal(
+            loc=self.mu,
+            scale=self.mu * 0.05,
+            size=batch_size
+        )
+        actual_mu = np.clip(actual_mu, 0.0, None)
+
+        alpha = np.sqrt(actual_mu)
+
+        return CoherentPulseBatch(
+            alpha=alpha,
+            mu=actual_mu,
+            phase=np.zeros(batch_size),
+            wavelength=self.wavelength
         )

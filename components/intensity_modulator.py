@@ -1,7 +1,7 @@
 # components/intensity_modulator.py
 
 import numpy as np
-from components.pulse import CoherentPulse
+from components.pulse import CoherentPulse,CoherentPulseBatch
 
 
 class IntensityModulator:
@@ -67,4 +67,67 @@ class IntensityModulator:
         transmission = 10 ** (-attenuation_db / 10)
         pulse.alpha *= np.sqrt(transmission)
         pulse.mu = abs(pulse.alpha) ** 2
+        return pulse
+    
+    #Vectorized
+    def modulate_batch(
+        self,
+        pulse: CoherentPulseBatch,
+        target_mu: np.ndarray,
+    ) -> CoherentPulseBatch:
+
+        eta_in = self.insertion_transmission
+
+        current_mu = pulse.mu * eta_in
+
+        actual_target = target_mu.copy()
+
+        if not np.isinf(self.extinction_ratio_db):
+
+            leakage_factor = 10 ** (-self.extinction_ratio_db / 10)
+
+            vacuum_mask = target_mu == 0.0
+
+            leakage = np.where(
+                current_mu > 0,
+                current_mu * leakage_factor,
+                1e-7,
+            )
+
+            actual_target[vacuum_mask] = leakage[vacuum_mask]
+
+        nonzero_mask = current_mu > 0
+
+        pulse.alpha[nonzero_mask] = (
+            pulse.alpha[nonzero_mask]
+            * np.sqrt(eta_in)
+            * np.sqrt(
+                actual_target[nonzero_mask]
+                / current_mu[nonzero_mask]
+            )
+        )
+
+        zero_mask = ~nonzero_mask
+
+        pulse.alpha[zero_mask] = (
+            np.sqrt(actual_target[zero_mask])
+            * np.exp(1j * pulse.phase[zero_mask])
+        )
+
+        pulse.mu = actual_target
+
+        return pulse
+    
+    def attenuate_batch(
+        self,
+        pulse: CoherentPulseBatch,
+        attenuation_db: float,
+    ) -> CoherentPulseBatch:
+
+        transmission = 10 ** (-attenuation_db / 10)
+
+        pulse.alpha *= np.sqrt(transmission)
+
+        pulse.mu = np.abs(pulse.alpha) ** 2
+
         return pulse

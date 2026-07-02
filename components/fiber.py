@@ -2,7 +2,7 @@
 
 import numpy as np
 
-from components.pulse import CoherentPulse
+from components.pulse import CoherentPulse,CoherentPulseBatch
 
 
 class Fiber:
@@ -51,6 +51,33 @@ class Fiber:
         
         pulse.phase = (pulse.phase + phase_noise) % (2 * np.pi)
         # อัปเดต complex amplitude ตามเฟสที่เพี้ยนไป
+        pulse.alpha = np.sqrt(pulse.mu) * np.exp(1j * pulse.phase)
+
+        return pulse
+    
+    #Vectorized
+    def propagate_batch(
+        self,
+        pulse: CoherentPulseBatch,
+    ) -> CoherentPulseBatch:
+
+        eta = self.transmission
+
+        # Loss
+        pulse.alpha *= np.sqrt(eta)
+        pulse.mu = np.abs(pulse.alpha) ** 2
+
+        # Phase noise
+        noise_std_dev = 0.002 * self.length
+
+        phase_noise = np.random.normal(
+            loc=0.0,
+            scale=noise_std_dev,
+            size=pulse.size,
+        )
+
+        pulse.phase = (pulse.phase + phase_noise) % (2 * np.pi)
+
         pulse.alpha = np.sqrt(pulse.mu) * np.exp(1j * pulse.phase)
 
         return pulse

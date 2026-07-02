@@ -2,7 +2,7 @@
 
 import numpy as np
 
-from components.pulse import CoherentPulse
+from components.pulse import CoherentPulse,CoherentPulseBatch
 import config
 
 
@@ -41,3 +41,26 @@ class Detector:
         probability = self.click_probability(pulse)
 
         return np.random.rand() < probability
+    
+    #Vectorized
+    def click_probability_batch(
+        self,
+        pulse: CoherentPulseBatch,
+    ) -> np.ndarray:
+
+        mu = pulse.intensity
+
+        signal = 1 - np.exp(-self.efficiency * mu)
+
+        total = 1 - (1 - signal) * (1 - self.dark_count)
+
+        return total
+    
+    def detect_batch(
+        self,
+        pulse: CoherentPulseBatch,
+    ) -> np.ndarray:
+
+        probability = self.click_probability_batch(pulse)
+
+        return np.random.rand(pulse.size) < probability

@@ -136,4 +136,4 @@ def run_full_tfqkd_simulation(num_pulses: int = 500000):
 
 if __name__ == "__main__":
     # แนะนำให้รันที่ 500,000 หรือ 1,000,000 pulses เพื่อลดความผันผวนทางสถิติ
-    run_full_tfqkd_simulation(num_pulses=10**10)
+    run_full_tfqkd_simulation(num_pulses=10_000_000)
