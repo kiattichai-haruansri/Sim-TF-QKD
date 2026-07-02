@@ -19,14 +19,19 @@ class CoherentPulse:
     def intensity(self) -> float:
         return abs(self.alpha) ** 2
     
-#Vectorized
+@dataclass(slots=True)
 class CoherentPulseBatch:
-
     alpha: np.ndarray
     mu: np.ndarray
     phase: np.ndarray
     wavelength: float
 
     @property
-    def intensity(self) -> np.ndarray:
+    def intensity(self):
         return np.abs(self.alpha) ** 2
+    
+    @property
+    def size(self):
+        return self.alpha.size
+
+    

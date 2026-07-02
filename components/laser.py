@@ -9,7 +9,7 @@ class Laser:
 
     def __init__(
         self,
-        mu: float,
+        mu,
         wavelength: float = 1550e-9,
     ):
         self.mu = mu
