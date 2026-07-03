@@ -23,7 +23,7 @@ ENCODING_PHASES = [0.0, np.pi]
 # ==========================================
 # Channel (Fiber) Parameters
 # ==========================================
-FIBER_LENGTH_KM = 50.0       # ระยะทางไฟเบอร์ฝั่งละ (Alice -> Charlie และ Bob -> Charlie)
+FIBER_LENGTH_KM = 125.0       # ระยะทางไฟเบอร์ฝั่งละ (Alice -> Charlie และ Bob -> Charlie)
 FIBER_LOSS_DB_PER_KM = 0.2   # อัตราการลดทอนของสายไฟเบอร์ (dB/km)
 
 # ==========================================
