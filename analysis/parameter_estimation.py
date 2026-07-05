@@ -1,46 +1,106 @@
 # analysis/parameter_estimation.py
-# รอทำใหม่
-import numpy as np
+
+from __future__ import annotations
+
+from analysis.statistics import build_statistics
+from analysis.decoy_solver import DecoyLPSolver
+
 
 def estimate_decoy_parameters(
-    mu: float, nu: float, 
-    gain_mu: float, gain_nu: float, gain_vac: float,
-    error_mu: float, error_nu: float
+    *,
+    intensities: list,
+    observed_counts: dict,
+    total_counts: dict,
+    epsilon: float = 1e-10,
+    cutoff: int = 12,
 ):
     """
-    ประเมินพารามิเตอร์ Y_1 (Single-photon Yield) และ e_1 (Single-photon Error Rate)
-    โดยใช้วิธี Decoy-State แบบ 3 สถานะ (Signal=mu, Decoy=nu, Vacuum=0)
-    
-    Parameters:
-    - gain (Q): อัตราการเกิดเหตุการณ์ (Valid events / Total pulses)
-    - error (E): ค่า QBER ของแต่ละสถานะ
-    """
-    # 1. Vacuum Yield และ Error (ทางทฤษฎี e0 = 0.5 เพราะเป็น Dark count ล้วนๆ)
-    Y_0 = gain_vac
-    e_0 = 0.5 
-    
-    # 2. คำนวณ Lower bound ของ Single-photon Yield (Y_1)
-    # สมการ: Y_1 >= (mu / (mu*nu - nu^2)) * (Gain_nu * e^nu - Gain_mu * e^mu * (nu^2 / mu^2) - ... )
-    term1 = gain_nu * np.exp(nu)
-    term2 = gain_mu * np.exp(mu) * ((nu**2) / (mu**2))
-    term3 = ((mu**2 - nu**2) / (mu**2)) * Y_0
-    
-    Y_1_lower = (mu / (mu * nu - nu**2)) * (term1 - term2 - term3)
-    # ป้องกันค่าติดลบที่เกิดจากความผันผวนทางสถิติ (Finite-size effect)
-    Y_1_lower = max(0.0, Y_1_lower)
-    
-    # 3. คำนวณ Upper bound ของ Single-photon Error Rate (e_1)
-    if Y_1_lower > 0 and nu > 0:
-        e_1_upper = (error_nu * gain_nu * np.exp(nu) - e_0 * Y_0) / (Y_1_lower * nu)
-        e_1_upper = max(0.0, min(0.5, e_1_upper)) # e_1 ไม่ควรเกิน 50%
-    else:
-        e_1_upper = 0.5
+    Finite-key Decoy-State parameter estimation for TF-QKD.
 
-    # 4. อัตราการได้รับโฟตอนเดี่ยวรวม (Q_1)
-    Q_1 = Y_1_lower * mu * np.exp(-mu)
+    Parameters
+    ----------
+    intensities
+        List of decoy intensities.
+
+    observed_counts
+        Number of valid detection events. Keyed by (mu_a, mu_b).
+
+    total_counts
+        Number of transmitted pulses. Keyed by (mu_a, mu_b).
+
+    epsilon
+        Failure probability.
+
+    cutoff
+        Photon-number truncation.
+
+    Returns
+    -------
+    dict
+    {
+        "statistics": ...,
+        "expectation_bounds": ...,
+        "lp_result": ...
+    }
+    """
+
+    #
+    # ---------------------------------------
+    # Gain confidence intervals
+    # ---------------------------------------
+    #
+    # build_statistics ตอนนี้ต้องรับและคืนค่าเป็น dict ที่มี Key เป็น (mu_a, mu_b)
+    statistics = build_statistics(
+        observed_counts=observed_counts,
+        total_counts=total_counts,
+        epsilon=epsilon,
+    )
+
+    #
+    # ---------------------------------------
+    # Observable bounds
+    #
+    # Q_lower <= Q <= Q_upper
+    # ---------------------------------------
+    #
+
+    expectation_bounds = {}
+
+    for mu_a in intensities:
+        for mu_b in intensities:
+            pair = (mu_a, mu_b)
+
+            # นำเงื่อนไข if mu_a != mu_b: continue ออก
+            # เพื่อให้ดึงข้อมูลทั้ง 9 คู่ (สำหรับ 3 intensities) มาใช้งาน
+
+            stat = statistics[pair]
+
+            expectation_bounds[pair] = (
+                stat.lower_probability,
+                stat.upper_probability,
+            )
+
+    #
+    # ---------------------------------------
+    # LP Solver
+    # ---------------------------------------
+    #
+
+    solver = DecoyLPSolver(
+        intensities=intensities,
+        cutoff=cutoff,
+    )
+
+    lp_result = solver.solve_all(
+        expectation_bounds,
+    )
+
+    #
+    # ---------------------------------------
+    #
 
     return {
-        "Y_1": Y_1_lower,
-        "e_1": e_1_upper,
-        "Q_1": Q_1
+        "statistics": statistics,
+        "expectation_bounds": expectation_bounds,
+        "lp_result": lp_result,
     }

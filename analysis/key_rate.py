@@ -1,32 +1,139 @@
 # analysis/key_rate.py
-import numpy as np
 
-def shannon_entropy(x: float) -> float:
-    if x <= 0.0 or x >= 1.0: return 0.0
-    return -x * np.log2(x) - (1 - x) * np.log2(1 - x)
+from __future__ import annotations
+
+import math
+
+
+def binary_entropy(x: float) -> float:
+    """
+    Binary Shannon entropy.
+
+    h(x) = -x log2 x - (1-x) log2(1-x)
+    """
+
+    if x <= 0.0 or x >= 1.0:
+        return 0.0
+
+    return (
+        -x * math.log2(x)
+        - (1.0 - x) * math.log2(1.0 - x)
+    )
+
 
 def calculate_finite_key_rate(
-    M_x: float,           # จำนวนข้อมูลที่ผ่าน sifting ใน X basis
-    qber_signal: float,   # QBER ของ X basis
-    e_ph_U: float,        # ขอบเขตบนของ Phase-error rate (ได้จาก parameter_estimation)
-    epsilon_s: float,     # Failure probability ของความปลอดภัย
-    epsilon_pa: float,
-    lambda_ec: float      # จำนวนบิตที่ใช้ทำ Error correction
-) -> float:
+    *,
+    M_x: int,
+    e_ph_U: float,
+    lambda_ec: float,
+    epsilon_s: float = 1e-10,
+    epsilon_pa: float = 1e-10,
+):
     """
-    คำนวณ Secure Key Rate ตามสมการ Finite-key (สมการที่ 4 ของเปเปอร์)
-    l = floor[ M_x(1 - h(e_ph^U)) - lambda_ec - log2(2/epsilon_s) - log2(1/(4*(epsilon_pa**2)))]
-    """
-    # 1. Privacy amplification term
-    privacy_term = M_x * (1 - shannon_entropy(e_ph_U))
-    
-    # 2. Finite-key penalty terms (สมการ 4)
-    # log2(2/epsilon_s) คือค่า Penalty จากการประมาณค่าทางสถิติ
-    finite_key_penalty = np.log2(2 / epsilon_s) 
+    Finite-key secret key length (Nature 2020 Eq. 4)
 
-    Privacy_amplification_penalty = np.log2(1 / (4*(epsilon_pa**2)))
-    
-    # 3. Secure Key Rate (bits per pulse)
-    skr = (privacy_term - lambda_ec - finite_key_penalty - Privacy_amplification_penalty) / M_x
-    
-    return max(0.0, skr)
+        l =
+            M_x (1-h(e_ph))
+            - lambda_ec
+            - log2(2/eps_s)
+            - log2(1/(4 eps_pa²))
+
+    Returns
+    -------
+    dict
+
+        {
+            "secret_key_length": ...,
+            "secret_key_rate": ...,
+            "privacy_term": ...,
+            "finite_penalty": ...,
+            "pa_penalty": ...
+        }
+    """
+
+    if M_x <= 0:
+
+        return {
+
+            "secret_key_length": 0,
+
+            "secret_key_rate": 0.0,
+
+            "privacy_term": 0.0,
+
+            "finite_penalty": 0.0,
+
+            "pa_penalty": 0.0,
+
+        }
+
+    #
+    # Privacy amplification
+    #
+
+    privacy_term = M_x * (
+
+        1.0 - binary_entropy(e_ph_U)
+
+    )
+
+    #
+    # Finite-size penalty
+    #
+
+    finite_penalty = math.log2(
+
+        2.0 / epsilon_s
+
+    )
+
+    #
+    # Privacy amplification penalty
+    #
+
+    pa_penalty = math.log2(
+
+        1.0 / (4.0 * epsilon_pa * epsilon_pa)
+
+    )
+
+    #
+    # Secret key length
+    #
+
+    key_length = (
+
+        privacy_term
+        - lambda_ec
+        - finite_penalty
+        - pa_penalty
+
+    )
+
+    key_length = max(
+
+        0.0,
+
+        math.floor(key_length),
+
+    )
+
+    #
+    # Secret key rate
+    #
+
+    key_rate = key_length / M_x
+
+    return {
+
+        "secret_key_length": int(key_length),
+
+        "secret_key_rate": key_rate,
+
+        "privacy_term": privacy_term,
+
+        "finite_penalty": finite_penalty,
+
+        "pa_penalty": pa_penalty,
+
+    }

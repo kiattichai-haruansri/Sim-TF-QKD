@@ -157,74 +157,12 @@ def run_vectorized_tfqkd(total_pulses=10**8, batch_size=10**6):
             f"QBER: {s['qber']*100:.2f}% | "
             f"Clicks: {s['events']:,}"
         )
-    """
-    print(
-        f"[Signal (mu={config.MU_SIGNAL})] "
-        f"Gain: {sig['gain']:.2e} | "
-        f"QBER: {sig['qber']*100:.2f}% | "
-        f"Clicks: {sig['total_events']:,}"
-    )
-
-    print(
-        f"[Decoy  (nu={config.MU_DECOY})] "
-        f"Gain: {dec['gain']:.2e} | "
-        f"QBER: {dec['qber']*100:.2f}% | "
-        f"Clicks: {dec['total_events']:,}"
-    )
-
-    print(
-        f"[Vacuum (0={config.MU_VACUUM})] "
-        f"Gain: {vac['gain']:.2e} | "
-        f"QBER: {vac['qber']*100:.2f}% | "
-        f"Clicks: {vac['total_events']:,}"
-    )
-
-    print("\n--- 3. Parameter Estimation & Key Rate ---")
-
-    params = estimate_decoy_parameters(
-        mu=config.MU_SIGNAL,
-        nu=config.MU_DECOY,
-        gain_mu=sig["gain"],
-        gain_nu=dec["gain"],
-        gain_vac=vac["gain"],
-        error_mu=sig["qber"],
-        error_nu=dec["qber"],
-    )
-
-    print(f"Estimated Single-photon Yield (Y₁): {params['Y_1']:.2e}")
-    print(f"Estimated Single-photon Error (e₁): {params['e_1']*100:.2f}%")
-
-    skr = calculate_finite_key_rate(
-        M_x=sig["total_events"],
-        qber_signal=sig["qber"],
-        e_ph_U=params["e_1"],
-        epsilon_s=1e-10,
-        epsilon_pa=(1e-10)/3,
-        lambda_ec=config.LAMBDA_EC,
-    )
-
-    print("\n========================================")
-
-    if skr > 0:
-
-        total_secure_bits = int(
-            skr * sent_counts[config.MU_SIGNAL]
-        )
-
-        print(f"✅ SECURE KEY RATE (Finite-Key): {skr:.6e} bits/pulse")
-        print(f"✅ Total Secure Bits Extracted: ~{total_secure_bits:,} bits")
-
-    else:
-
-        print("❌ SECURE KEY RATE: 0.0 bits/pulse")
-        print("❌ Key rate is zero due to high finite-key penalties or high noise.")
-    """
 
     print("========================================")
     print(f"Simulation Time: {time.time()-start:.2f} s")
 
 if __name__ == "__main__":
     run_vectorized_tfqkd(
-        total_pulses=10**8,
+        total_pulses=10**10,
         batch_size=10**6,
     )

@@ -38,3 +38,6 @@ EPSILON_S = 1e-10 # ค่าความปลอดภัยของระบ
 
 # เพิ่มเข้าไปเพื่อให้ SNS ทำงานได้
 SEND_PROBABILITY = 0.5  # ความน่าจะเป็นที่จะส่งสัญญาณ (Sending state)
+
+LAMBDA_N_TIDAL = 0
+M_00_U = 1e3
