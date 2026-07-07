@@ -47,7 +47,7 @@ def build_statistic(
 
     lower, upper = confidence_interval(
         observed=observed,
-        n=total,
+        M_s=total,
         epsilon=epsilon,
     )
 

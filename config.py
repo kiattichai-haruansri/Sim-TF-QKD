@@ -37,7 +37,9 @@ LAMBDA_EC = 0.5   # ปริมาณบิตที่ใช้ทำ Error Co
 EPSILON_S = 1e-10 # ค่าความปลอดภัยของระบบ [cite: 245]
 
 # เพิ่มเข้าไปเพื่อให้ SNS ทำงานได้
-SEND_PROBABILITY = 0.5  # ความน่าจะเป็นที่จะส่งสัญญาณ (Sending state)
+#SEND_PROBABILITY = 0.5  # ความน่าจะเป็นที่จะส่งสัญญาณ (Sending state)
 
-LAMBDA_N_TIDAL = 0
-M_00_U = 1e3
+LAMBDA_N_TIDAL = 1e2
+M_00_U = 1e2
+
+TOTAL_PULSE=10**9

@@ -158,11 +158,167 @@ def run_vectorized_tfqkd(total_pulses=10**8, batch_size=10**6):
             f"Clicks: {s['events']:,}"
         )
 
+    # ---------------------------------------------------------
+    # ต่อจาก print(f"Simulation Time: {time.time()-start:.2f} s")
+    # ---------------------------------------------------------
+
+    print("\n--- 3. Parameter Estimation (Decoy-State) ---")
+    
+    # ดึงข้อมูล counts ให้อยู่ในรูปแบบที่ parameter_estimation ต้องการ
+    observed_counts = {pair: data["valid"] for pair, data in pair_counts.items()}
+    total_counts = {pair: data["sent"] for pair, data in pair_counts.items()}
+    
+    # กำหนด Security & Failure probabilities (Step 1)
+    epsilon_c = 1e-10
+    epsilon_a = 1e-10
+    epsilon_s = 1e-10
+    epsilon_pa = 1e-10
+    S_cut = 4
+
+    # รัน LP Solver เพื่อหาขอบเขต (Step 4)
+    pe_results = estimate_decoy_parameters(
+        intensities=config.INTENSITIES,
+        observed_counts=observed_counts,
+        total_counts=total_counts,
+        epsilon=epsilon_c,  # ใช้ eps_c ในการประเมินสถิติเบื้องต้น
+        cutoff=S_cut,
+    )
+    lp_result = pe_results["lp_result"]
+    print("✓ LP Solver completed bounds estimation.")
+
+    print("\n--- 4. Finite-Key Rate Calculation ---")
+
+    # กำหนดให้คู่ Signal-Signal เป็นฐานสำหรับการสร้างกุญแจ (M_X)
+    pair_signal = (config.MU_SIGNAL, config.MU_SIGNAL)
+    M_x = observed_counts[pair_signal]
+    E_x = stats[pair_signal]["qber"]
+    
+    # สมมติว่า M_s คือจำนวน valid events ทั้งหมด (M_X + M_Z)
+    M_s = sum(observed_counts.values()) 
+
+    # ---------------------------------------------------------
+    # คำนวณ Phase Error Rate (Step 5 & 6)
+    # ---------------------------------------------------------
+    # หมายเหตุ: ตรงนี้ต้องดึงขอบเขตบน (Upper bounds) MU_nm จาก lp_result
+    # ของคุณมาจัดเรียงเป็น Matrix แล้วนำไปเข้าสมการตาม Step 5-6 
+    # ผมจะจำลองฟังก์ชันและโครงสร้างให้ดูเป็นตัวอย่าง:
+    
+    import math
+    from analysis.key_rate import binary_entropy
+    from analysis.concentration import estimate_lambda_n_tidal
+
+    # Step 5: คำนวณค่า Delta 
+    # Δ = sqrt( (1 / 2*M_s) * ln(1 / ε_a) )
+    Delta = math.sqrt((1.0 / (2.0 * max(M_s, 1))) * math.log(1.0 / epsilon_a))
+    
+    # TODO: นำสมการคำนวณ Bound ที่ผมเคยเขียนให้ (calculate_bound) มาประยุกต์ใช้ตรงนี้
+    # เพื่อคำนวณ N_U_ph จาก MU_nm ที่ได้จาก lp_result, Delta, p_X, p_Z
+    # 
+    # จำลองค่า N_U_ph ชั่วคราว (คุณต้องแทนที่ด้วยผลจากการคำนวณจริง)
+    # N_U_ph = calculate_bound(...) 
+    
+    # ---------------------------------------------------------
+    # คำนวณ Phase Error Rate ของจริง (Step 5 & 6)
+    # ---------------------------------------------------------
+    import math
+    from analysis.photon import p_x_nm,p_z_nm,calculate_bound
+
+    # สมมติว่า total_pulses คือ 10**9 (ดึงมาจากพารามิเตอร์ที่คุณตั้งไว้ใน main)
+    total_pulses = config.TOTAL_PULSE
+
+    # คำนวณค่าคาดหวังของ M_00 ล่วงหน้า (Prior)
+    lambda_n_tidal = estimate_lambda_n_tidal(
+        total_pulses=total_pulses,
+        intensities=config.INTENSITIES,
+        send_probs=config.INTENSITY_PROBABILITIES,
+        dark_count=config.DARK_COUNT_RATE # ต้องแน่ใจว่าใน config มีตัวแปรนี้นะครับ
+    )
+    from analysis.concentration import calculate_delta_00,azuma_delta
+    # --- 1. คำนวณค่า Delta ---
+    # Delta มาตรฐาน สำหรับ (n,m) อื่นๆ
+    Delta = azuma_delta(M_s,epsilon_a)
+    
+    #Delta สำหรับ 00
+    Delta_00 = calculate_delta_00(M_s, epsilon_a, lambda_n_tidal)
+    
+    MZ = M_s 
+    term1_sum = 0.0
+    term2_sum = 0.0
+    S_cut = 4 
+    MAX_PHOTONS = 8 
+
+    # --- 2. คำนวณ N^U_ph (Upper Bound ของ Phase Error) ---
+    for n in range(MAX_PHOTONS):
+        for m in range(MAX_PHOTONS):
+            
+            P_X = float(p_x_nm(n, m))
+            P_Z = float(p_z_nm(n, m))
+            p_sqrt = math.sqrt(max(0, P_X / P_Z))
+            
+            if (n + m) <= S_cut:
+                # ดึง Yield ของ Decoy-State
+                if (n, m) in lp_result:
+                    Y_U_nm = float(lp_result[(n, m)]['upper'])
+                else:
+                    Y_U_nm = 1.0 
+                
+                # แปลง Yield เป็น Count
+                M_U_nm = total_pulses * P_Z * Y_U_nm
+                
+                # *** เลือกใช้ Delta_nm ให้ถูกตัว ***
+                if n == 0 and m == 0:
+                    Delta_nm = Delta_00  # ใช้ค่าที่คำนวณจาก Tidal สำหรับ Vacuum
+                else:
+                    Delta_nm = Delta     # ใช้ค่ามาตรฐานสำหรับโฟตอนคู่อื่นๆ
+                
+                term1_sum += p_sqrt * math.sqrt(max(0, M_U_nm + Delta_nm))
+            else:
+                # เทอมตัดทิ้ง (Truncation)
+                term2_sum += p_sqrt
+
+    # --- 3. ประกอบสมการหาจำนวน Phase Error (N_U_ph) ---
+    term2_total = math.sqrt(max(0, MZ + Delta)) * term2_sum
+    N_U_ph = ((float(config.INTENSITY_PROBABILITIES[0]**2)) / (float(config.INTENSITY_PROBABILITIES[1]**2))) * (term1_sum + term2_total)**2 + Delta
+    
+    # --- 4. คำนวณสัดส่วน Phase Error (e_ph_U) ---
+    e_ph_U = N_U_ph / M_x if M_x > 0 else 1.0
+    e_ph_U = min(e_ph_U, 1.0 - 1e-10)
+    
+    print(f"Sifted Key Length (M_x) : {M_x:,}")
+    print(f"QBER (E_x)              : {E_x*100:.2f}%")
+    print(f"Phase Error (e_ph_U)    : {e_ph_U*100:.2f}%")
+
+    # ---------------------------------------------------------
+    # คำนวณ Key Rate (Step 7)
+    # ---------------------------------------------------------
+    
+    # คำนวณ Error Correction cost (lambda_ec)
+    # lambda_ec = f_EC * M_X * h(E_X)
+    f_ec = 1.15  # Error correction inefficiency factor
+    lambda_ec = f_ec * M_x * binary_entropy(E_x)
+
+    # เรียกใช้ฟังก์ชันคำนวณ Key rate ของคุณ
+    key_results = calculate_finite_key_rate(
+        M_x=M_x,
+        e_ph_U=e_ph_U,
+        lambda_ec=lambda_ec,
+        epsilon_s=epsilon_s,
+        epsilon_pa=epsilon_pa,
+    )
+
+    print("========================================")
+    print("           FINAL KEY RESULTS            ")
+    print("========================================")
+    print(f"Secret Key Length : {key_results['secret_key_length']:,} bits")
+    print(f"Secret Key Rate   : {key_results['secret_key_rate']:.4e} bits/pulse")
+    print(f"Privacy Term      : {key_results['privacy_term']:.2f}")
+    print(f"Finite Penalty    : {key_results['finite_penalty']:.2f}")
+    print(f"PA Penalty        : {key_results['pa_penalty']:.2f}")
     print("========================================")
     print(f"Simulation Time: {time.time()-start:.2f} s")
 
 if __name__ == "__main__":
     run_vectorized_tfqkd(
-        total_pulses=10**10,
+        total_pulses=config.TOTAL_PULSE,
         batch_size=10**6,
     )

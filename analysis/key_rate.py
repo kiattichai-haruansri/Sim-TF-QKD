@@ -1,8 +1,8 @@
 # analysis/key_rate.py
 
 from __future__ import annotations
-
 import math
+import config
 
 
 def binary_entropy(x: float) -> float:
@@ -110,19 +110,19 @@ def calculate_finite_key_rate(
 
     )
 
-    key_length = max(
+    #key_length = max(
 
-        0.0,
+        #0.0,
+        #key_length,
+        #math.floor(key_length),
 
-        math.floor(key_length),
-
-    )
+    #)
 
     #
     # Secret key rate
     #
 
-    key_rate = key_length / M_x
+    key_rate = key_length / config.TOTAL_PULSE
 
     return {
 
